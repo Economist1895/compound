@@ -90,6 +90,9 @@ header.top {
   gap: var(--gap);
   align-items: start;
 }
+/* grid items default to min-width:auto, which lets the results column grow to
+   fit the wide breakdown table instead of letting .table-scroll scroll. */
+.split > * { min-width: 0; }
 .col-inputs { position: sticky; top: 18px; }
 .stack > * + * { margin-top: var(--gap); }
 
