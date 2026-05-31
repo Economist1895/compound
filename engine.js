@@ -171,16 +171,43 @@
     };
   }
 
-  /* ------------------------------------------------------------- promotions */
-  // Combined one-off bump multiplier for an exact age, from [{age, pct}, ...].
-  function bumpFor(promotions, age) {
-    var add = 0;
-    for (var k = 0; k < promotions.length; k++) {
-      var ba = num(promotions[k].age, NaN);
-      var bp = num(promotions[k].pct, NaN);
-      if (!isNaN(ba) && !isNaN(bp) && Math.round(ba) === age) add += bp / 100;
+  /* --------------------------------------------------------- salary anchors */
+  // Build the nominal-annual salary "knots" that drive the salary curve: the
+  // current salary (which pins today) plus any user milestones. Each anchor is
+  // a MONTHLY figure stored with the basis it was entered under — 'real' values
+  // (today's dollars, the default) are inflated to a nominal salary at their
+  // age; 'nominal' values are already face-value at that age. Returns knots
+  // sorted ascending by age: [{ age, salary }] with salary = nominal annual.
+  function buildSalaryKnots(anchors, startSalary, currentAge, inflation) {
+    var byAge = {};
+    byAge[currentAge] = startSalary;                    // current salary pins today
+    for (var i = 0; i < anchors.length; i++) {
+      var a = num(anchors[i].age, NaN);
+      var monthly = num(anchors[i].salary, NaN);
+      if (isNaN(a) || isNaN(monthly) || a <= currentAge) continue;
+      var annual = monthly * 12;
+      if (anchors[i].basis !== 'nominal') annual *= Math.pow(1 + inflation, a - currentAge);
+      byAge[a] = annual;                                // later entries override dupes
     }
-    return add;
+    var ages = Object.keys(byAge).map(Number).sort(function (x, y) { return x - y; });
+    return ages.map(function (ag) { return { age: ag, salary: byAge[ag] }; });
+  }
+
+  // Nominal annual salary at an exact age. Geometric (equal-%) interpolation
+  // between the surrounding knots; beyond the last knot — and for the whole
+  // curve when the only knot is the start salary — it compounds at annualRaise.
+  function salaryAtAge(knots, age, annualRaise) {
+    var prev = knots[0];
+    for (var i = 0; i < knots.length; i++) {
+      var k = knots[i];
+      if (k.age === age) return k.salary;
+      if (k.age > age) {
+        var t = (age - prev.age) / (k.age - prev.age);
+        return prev.salary * Math.pow(k.salary / prev.salary, t);
+      }
+      prev = k;
+    }
+    return prev.salary * Math.pow(1 + annualRaise, age - prev.age);
   }
 
   /* ============================================================ projection loop */
@@ -200,9 +227,12 @@
     var bonusMonths  = num(s.bonusMonths, 0);
     var topup        = num(s.cpfTopup, 0);
     var cashMonths   = num(s.cashTargetMonths, 6);
-    var promotions   = Array.isArray(s.payBumps) ? s.payBumps : [];
+    var anchors      = Array.isArray(s.salaryAnchors) ? s.salaryAnchors : [];
 
     if (projectToAge < currentAge) projectToAge = currentAge;
+
+    // Salary curve: interpolate between milestones, else compound annualRaise.
+    var salaryKnots = buildSalaryKnots(anchors, startSalary, currentAge, inflation);
 
     // Starting CPF balances (estimate when blank)
     var est = estimateCpf(currentAge, startSalary);
@@ -225,9 +255,7 @@
 
     for (var yearIndex = 0; age <= projectToAge; yearIndex++, age++) {
       // ---- 1. SALARY ----
-      if (yearIndex === 0) salary = startSalary;
-      else salary = salary * (1 + annualRaise);
-      salary = salary * (1 + bumpFor(promotions, age));   // one-off pay bump this age
+      salary = salaryAtAge(salaryKnots, age, annualRaise);
       var bonus = (salary / 12) * bonusMonths;             // Additional Wages
 
       // ---- 2. CPF CONTRIBUTIONS ----
@@ -349,6 +377,8 @@
     applyCpfInterest: applyCpfInterest,
     settle55: settle55,
     resolveBand: resolveBand,
+    buildSalaryKnots: buildSalaryKnots,
+    salaryAtAge: salaryAtAge,
     fmtMoney: fmtMoney,
     fmtCompact: fmtCompact,
     fmtMillions: fmtMillions,

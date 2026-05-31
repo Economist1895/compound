@@ -17,8 +17,12 @@ on reload.
 
 - **Five inputs to start:** current age, gross monthly salary, annual bonus,
   current investments + cash, expected return, and savings rate. Refine the rest
-  (raises, one-off pay bumps, inflation, target age, voluntary CPF top-ups, and
-  CPF starting balances) in the collapsible sections.
+  (base raise, salary milestones, inflation, target age, voluntary CPF top-ups,
+  and CPF starting balances) in the collapsible sections.
+- **Flexible salary growth** — set a base annual raise, and/or pin your expected
+  gross monthly salary at specific ages ("milestones"). The salary curve runs
+  from today's pay through each milestone (geometric interpolation), then resumes
+  the base raise beyond the last. Milestones honour the real/nominal toggle.
 - **Projects net worth** year by year, split into **Investments** (cash + market)
   and **CPF** (OA · SA · MediSave · RA).
 - **Real or nominal** — toggle between today's dollars and future dollars

@@ -13,7 +13,7 @@
     age: 30, salary: 7500, investments: 120000, returnPct: 5, savingsRate: 40,
     salaryIncreasePct: 3, inflationPct: 2.5, bonusMonths: 2,
     untilAge: 65, cpfTopup: 0,
-    payBumps: [{ age: '', pct: '' }],
+    salaryAnchors: [{ age: '', salary: '', basis: 'real' }],
     oa: '', sa: '', ma: '', mode: 'real'
   };
 
@@ -187,60 +187,97 @@
     });
     return h('div', { class: 'disclosure' }, [head, body]);
   }
-  var bumpRowsEl = null;
+  var anchorRowsEl = null;
+  var anchorInputs = [];   // { anchor, salaryInp } — refreshed when the toggle flips
 
-  // "Pay bumps" — one-off raises at specific ages.
-  function makeBumpRow(bump) {
-    var ageInp = h('input', { type: 'text', inputmode: 'numeric', placeholder: '32', class: 'bnum' });
-    if (bump.age !== '') ageInp.value = bump.age;
-    ageInp.addEventListener('input', function () { bump.age = cleanNum(ageInp.value); renderResults(true); });
+  // Inflation factor between the current age and a milestone's age, used to
+  // convert a milestone's monthly salary between today's dollars and the
+  // face-value at that age.
+  function inflFactorTo(age) {
+    var infl = E.num(state.inflationPct, 2.5) / 100;
+    var yrs = Number(age) - Number(state.age);
+    return (isFinite(yrs) && yrs > 0) ? Math.pow(1 + infl, yrs) : 1;
+  }
+  // A milestone is stored as typed, tagged with the mode it was entered under
+  // (its basis). Rendering converts it into the active display mode so the
+  // toggle is a pure display lens — the same belief, shown real or nominal.
+  function anchorDisplayVal(anchor) {
+    if (anchor.salary === '' || anchor.salary == null) return '';
+    if (anchor.basis === state.mode) return Number(anchor.salary);
+    var f = inflFactorTo(anchor.age);
+    return anchor.basis === 'real' ? Number(anchor.salary) * f : Number(anchor.salary) / f;
+  }
+  function refreshAnchorInputs() {
+    anchorInputs.forEach(function (a) {
+      if (document.activeElement === a.salaryInp) return;   // don't clobber typing
+      var v = anchorDisplayVal(a.anchor);
+      a.salaryInp.value = (v === '') ? '' : Math.round(v).toLocaleString('en-SG');
+    });
+  }
 
-    var pctInp = h('input', { type: 'text', inputmode: 'decimal', placeholder: '15', class: 'bnum' });
-    if (bump.pct !== '') pctInp.value = bump.pct;
-    pctInp.addEventListener('input', function () { bump.pct = cleanNum(pctInp.value); renderResults(true); });
+  // "Salary milestones" — expected monthly salary at specific ages; the engine
+  // interpolates between them and falls back to the base raise beyond the last.
+  function makeAnchorRow(anchor) {
+    var ageInp = h('input', { type: 'text', inputmode: 'numeric', placeholder: '35', class: 'bnum' });
+    if (anchor.age !== '') ageInp.value = anchor.age;
+    ageInp.addEventListener('input', function () { anchor.age = cleanNum(ageInp.value); renderResults(true); });
 
-    var rm = h('button', { class: 'bump-rm', type: 'button', 'aria-label': 'Remove this bump', title: 'Remove' }, [ document.createTextNode('×') ]);
+    var salInp = h('input', { type: 'text', inputmode: 'numeric', placeholder: '12,000', class: 'bnum' });
+    var disp = anchorDisplayVal(anchor);
+    if (disp !== '') salInp.value = Math.round(disp).toLocaleString('en-SG');
+    salInp.addEventListener('input', function () {
+      var raw = cleanNum(salInp.value);
+      anchor.salary = raw === '' ? '' : Number(raw);
+      anchor.basis = state.mode;                       // pin the unit at entry
+      renderResults(true);
+    });
+    salInp.addEventListener('blur', refreshAnchorInputs);
+    anchorInputs.push({ anchor: anchor, salaryInp: salInp });
+
+    var rm = h('button', { class: 'bump-rm', type: 'button', 'aria-label': 'Remove this milestone', title: 'Remove' }, [ document.createTextNode('×') ]);
     var row = h('div', { class: 'bump-row' }, [
       h('div', { class: 'bcell' }, [ageInp]),
-      h('div', { class: 'bcell bpct' }, [ pctInp, h('span', { class: 'bsuf', text: '%' }) ]),
+      h('div', { class: 'bcell bsal' }, [ h('span', { class: 'bpre', text: '$' }), salInp ]),
       rm
     ]);
     rm.addEventListener('click', function () {
-      var idx = state.payBumps.indexOf(bump);
-      if (idx > -1) state.payBumps.splice(idx, 1);
+      var idx = state.salaryAnchors.indexOf(anchor);
+      if (idx > -1) state.salaryAnchors.splice(idx, 1);
+      anchorInputs = anchorInputs.filter(function (a) { return a.anchor !== anchor; });
       row.remove();
-      if (state.payBumps.length === 0) {
-        var nb = { age: '', pct: '' };
-        state.payBumps.push(nb);
-        bumpRowsEl.appendChild(makeBumpRow(nb));
+      if (state.salaryAnchors.length === 0) {
+        var nb = { age: '', salary: '', basis: state.mode };
+        state.salaryAnchors.push(nb);
+        anchorRowsEl.appendChild(makeAnchorRow(nb));
       }
       renderResults(true);
     });
     return row;
   }
-  function payBumpsBlock() {
-    bumpRowsEl = h('div', { class: 'bump-rows' });
-    state.payBumps.forEach(function (b) { bumpRowsEl.appendChild(makeBumpRow(b)); });
-    var add = h('button', { class: 'bump-add', type: 'button' }, [ document.createTextNode('+ Add bump') ]);
+  function salaryAnchorsBlock() {
+    anchorRowsEl = h('div', { class: 'bump-rows' });
+    state.salaryAnchors.forEach(function (a) { anchorRowsEl.appendChild(makeAnchorRow(a)); });
+    var add = h('button', { class: 'bump-add', type: 'button' }, [ document.createTextNode('+ Add milestone') ]);
     add.addEventListener('click', function () {
-      var nb = { age: '', pct: '' };
-      state.payBumps.push(nb);
-      var r = makeBumpRow(nb);
-      bumpRowsEl.appendChild(r);
+      var nb = { age: '', salary: '', basis: state.mode };
+      state.salaryAnchors.push(nb);
+      var r = makeAnchorRow(nb);
+      anchorRowsEl.appendChild(r);
       var first = r.querySelector('input');
       if (first) first.focus();
     });
     return h('div', { class: 'bumps' }, [
-      h('div', { class: 'bumps-head' }, [ h('span', { text: 'One-off increases' }) ]),
-      h('div', { class: 'bump-cols' }, [ h('span', { text: 'At age' }), h('span', { text: 'Increase' }), h('span', {}) ]),
-      bumpRowsEl,
+      h('div', { class: 'bumps-head' }, [ h('span', { text: 'Salary milestones' }) ]),
+      h('p', { class: 'bump-note', text: "Expected monthly salary at an age. The curve runs from today's pay through each milestone, then grows at the base raise beyond the last. With none set, the base raise applies throughout." }),
+      h('div', { class: 'bump-cols' }, [ h('span', { text: 'At age' }), h('span', { text: 'Monthly salary' }), h('span', {}) ]),
+      anchorRowsEl,
       add
     ]);
   }
   function assumptionsDisc() {
     return disclosure('Assumptions', [
       makeField('salaryIncreasePct'),
-      payBumpsBlock(),
+      salaryAnchorsBlock(),
       makeField('inflationPct'),
       makeField('untilAge'),
       makeField('cpfTopup')
@@ -490,6 +527,7 @@
       r.cap.textContent = cap;
     });
     tableTargets.forEach(function (t) { renderTable(t.tbody, data); });
+    refreshAnchorInputs();
     updateCharts(data);
 
     if (flash) {
