@@ -506,7 +506,7 @@
     var data = E.project(state, state.mode);
     lastData = data;
     var last = data.rows[data.rows.length - 1];
-    var heroTxt = E.fmtMillions(last.total);
+    var heroTxt = E.fmtCompact(last.total);
     var cap = state.mode === 'real' ? "today's dollars" : 'future dollars';
     var sub = (state.mode === 'real' ? 'In real terms · ' : 'Nominal · ') + 'over ' + (data.rows.length - 1) + ' years';
 

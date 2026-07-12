@@ -69,6 +69,13 @@
   var EXTRA_55PLUS_TIER2 = 30000;  // 55+: +1% on next $30k combined
   var EXTRA_55PLUS_RATE2 = 0.01;
 
+  /* --- CPF Cash Top-up Relief ----------------------------------------------
+     Income-tax relief for cash top-ups to one's own SA (under 55) / RA (55+),
+     capped per year. (A further $8,000 cap for top-ups to family members is
+     out of scope — the tool models self top-ups only.)
+     Re-check: iras.gov.sg → "CPF Cash Top-up Relief". */
+  var TOPUP_RELIEF_CAP = 8000;
+
   /* --- Resident income tax brackets (IRAS, YA2024 structure) ---------------
      Marginal bands; engine walks them. `floor` is the band's lower bound,
      `rate` the marginal rate on income within the band, `cumAtFloor` the total
@@ -110,6 +117,8 @@
     EXTRA_55PLUS_RATE1: EXTRA_55PLUS_RATE1,
     EXTRA_55PLUS_TIER2: EXTRA_55PLUS_TIER2,
     EXTRA_55PLUS_RATE2: EXTRA_55PLUS_RATE2,
+
+    TOPUP_RELIEF_CAP: TOPUP_RELIEF_CAP,
 
     TAX_BANDS: TAX_BANDS
   };

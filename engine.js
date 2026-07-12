@@ -14,6 +14,8 @@
      which avoids the double-count latent in literally reading spec 5.5 + step 9.
    - All money in `results[]` is NOMINAL; the real/nominal toggle only changes a
      display-time deflator, so it is instant and lossless.
+   - Top-up relief (not in the spec): voluntary RSTU top-ups earn CPF Cash
+     Top-up Relief against income tax, capped at TOPUP_RELIEF_CAP per year.
    ============================================================================ */
 (function (global) {
   'use strict';
@@ -135,7 +137,9 @@
       state.cash += toCash;
       return savings - toCash;                 // newly invested (added in step 9)
     }
-    // shortfall: draw cash, then investments
+    // shortfall: draw cash, then investments.
+    // NOTE: unreachable under the current savings-rate model (savings =
+    // rate * takeHome >= 0 always); kept for a future absolute-expenses mode.
     var shortfall = -savings;
     var fromCash = Math.min(state.cash, shortfall);
     state.cash -= fromCash;
@@ -203,6 +207,12 @@
       if (k.age === age) return k.salary;
       if (k.age > age) {
         var t = (age - prev.age) / (k.age - prev.age);
+        // Geometric interpolation needs both endpoints > 0. A $0 milestone
+        // (career break) would give 0 * Math.pow(x/0, t) = NaN and poison the
+        // whole projection, so fall back to linear when either knot is <= 0.
+        if (prev.salary <= 0 || k.salary <= 0) {
+          return prev.salary + (k.salary - prev.salary) * t;
+        }
         return prev.salary * Math.pow(k.salary / prev.salary, t);
       }
       prev = k;
@@ -266,7 +276,10 @@
       applyVoluntaryTopup(topup, age, state);
 
       // ---- 4. INCOME TAX ----
-      var cpfRelief = cpf.employee;                        // employee CPF is deductible
+      // Employee CPF is deductible; RSTU cash top-ups earn CPF Cash Top-up
+      // Relief (capped). Relief technically requires the recipient account to
+      // be below FRS/BHS limits — ignored here alongside the $80k relief cap.
+      var cpfRelief = cpf.employee + Math.min(topup, C.TOPUP_RELIEF_CAP);
       var chargeable = Math.max(0, salary + bonus - cpfRelief);
       var tax = incomeTax(chargeable);
 
@@ -362,11 +375,6 @@
     if (abs >= 1e3) return '$' + Math.round(v / 1e3) + 'k';
     return '$' + Math.round(v);
   }
-  function fmtMillions(v) {
-    if (Math.abs(v) >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
-    if (Math.abs(v) >= 1e3) return '$' + Math.round(v / 1e3) + 'k';
-    return '$' + Math.round(v);
-  }
 
   global.CompoundEngine = {
     project: project,
@@ -381,7 +389,6 @@
     salaryAtAge: salaryAtAge,
     fmtMoney: fmtMoney,
     fmtCompact: fmtCompact,
-    fmtMillions: fmtMillions,
     num: num
   };
 })(typeof window !== 'undefined' ? window : globalThis);

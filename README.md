@@ -56,7 +56,8 @@ rules update is a one-line edit, never a logic change. They were verified on
   interest tiers, Full Retirement Sum ($220,400), and Basic Healthcare Sum
   ($79,000).
 - **[IRAS](https://www.iras.gov.sg)** — resident individual income tax brackets
-  (YA2024 structure, 0%–24%).
+  (YA2024 structure, 0%–24%) and the CPF Cash Top-up Relief cap ($8,000/year
+  for top-ups to your own SA/RA).
 
 > **Maintainers:** re-check each block in `constants.js` against the linked
 > authority before each tax year and bump the `lastVerified` date.
@@ -74,6 +75,7 @@ for the charts.
 | [`constants.js`](constants.js) | All CPF & tax figures (the only thing to update yearly) |
 | [`engine.js`](engine.js) | The projection loop and sub-functions |
 | [`main.js`](main.js) | UI wiring — connects inputs to the engine, renders chart + table |
+| [`test.js`](test.js) | Validation tests — run `node test.js` after every constants update |
 
 ## Run locally
 
@@ -86,6 +88,17 @@ python3 -m http.server 8000
 
 (Chart.js loads from a CDN, so the charts need an internet connection on first
 load.)
+
+## Tests
+
+```bash
+node test.js
+```
+
+Runs the validation tests from [`compound-engine-spec.md`](compound-engine-spec.md) §7,
+regression tests, and self-consistency checks on `constants.js` (CPF band sums,
+tax-table cumulative chain). **Run this after every yearly constants update** —
+it catches both typos in the figures and logic regressions in the engine.
 
 ## Deploy (GitHub Pages)
 
@@ -103,7 +116,15 @@ These are deliberate v1 simplifications (directional forecast, not advice):
 - No CPF LIFE payouts — the model ends at accumulated net worth; it does not
   spend it down after 65.
 - No MediSave→OA overflow at the Basic Healthcare Sum, no $80k tax-relief cap,
-  no tax rebates.
+  no tax rebates. Voluntary top-ups earn CPF Cash Top-up Relief (capped at
+  $8,000/yr) but are not stopped at the FRS as they would be in reality.
+- Savings first fill a cash buffer of ~6 months of expenses that earns **0%
+  interest** (not exposed in the UI) — early-year investing is lower than
+  `savings rate × take-home` until the buffer is full.
+- The FRS is frozen at the 2026 figure ($220,400) for every cohort. In reality
+  it rises yearly, so for younger users the model moves too little into RA at
+  55 — total net worth barely changes (SA and RA earn the same 4%), but the
+  post-55 liquid (OA) share is overstated.
 - CPF interest uses an annual (post-contribution) approximation of CPF's monthly
   method — intentionally conservative.
 - Singapore **citizen** only (no PR graduated rates).
